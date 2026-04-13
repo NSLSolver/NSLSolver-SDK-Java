@@ -1,6 +1,6 @@
 # NSLSolver Java SDK
 
-Java client for the [NSLSolver](https://nslsolver.com) captcha API. Supports Cloudflare Turnstile and Challenge pages.
+Java client for the [NSLSolver](https://nslsolver.com) captcha API. Supports Cloudflare Turnstile, Challenge pages, and Kasada.
 
 Requires Java 11+.
 
@@ -12,14 +12,14 @@ Requires Java 11+.
 <dependency>
     <groupId>com.nslsolver</groupId>
     <artifactId>nslsolver-java</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
 </dependency>
 ```
 
 **Gradle**
 
 ```groovy
-implementation 'com.nslsolver:nslsolver-java:1.0.0'
+implementation 'com.nslsolver:nslsolver-java:1.1.0'
 ```
 
 ## Usage
@@ -42,6 +42,20 @@ ChallengeResult challenge = solver.solveChallenge(
         .build()
 );
 System.out.println(challenge.getCfClearance());
+
+KasadaResult kasada = solver.solveKasada(
+    KasadaParams.builder()
+        .url("https://example.com/api")
+        .userAgent("Mozilla/5.0 ... Chrome/130.0.0.0 ...")
+        .uaVersion(130)
+        .kasadaConfig(KasadaConfig.builder()
+            .pJsPath("/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/p.js")
+            .fpHost("https://fp.example.com")
+            .tlHost("https://tl.example.com")
+            .build())
+        .build()
+);
+System.out.println(kasada.getHeaders());
 
 BalanceResult balance = solver.getBalance();
 System.out.println(balance.getBalance());

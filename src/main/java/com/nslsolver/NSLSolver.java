@@ -23,7 +23,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
-/** Client for the NSLSolver captcha solving API. Supports Turnstile and Challenge solving. */
+/** Client for the NSLSolver captcha solving API. Supports Turnstile, Challenge, and Kasada solving. */
 public final class NSLSolver implements AutoCloseable {
 
     private static final String DEFAULT_BASE_URL = "https://api.nslsolver.com";
@@ -31,7 +31,7 @@ public final class NSLSolver implements AutoCloseable {
     private static final int DEFAULT_MAX_RETRIES = 3;
     private static final long INITIAL_BACKOFF_MS = 1000;
     private static final double BACKOFF_MULTIPLIER = 2.0;
-    private static final String SDK_VERSION = "1.0.0";
+    private static final String SDK_VERSION = "1.1.0";
     private static final String USER_AGENT = "nslsolver-java/" + SDK_VERSION;
 
     private final String apiKey;
@@ -143,6 +143,57 @@ public final class NSLSolver implements AutoCloseable {
     }
 
     /**
+     * Solves a Kasada-protected page.
+     * @throws AuthenticationException if the API key is invalid (401)
+     * @throws InsufficientBalanceException if balance is too low (402)
+     * @throws TypeNotAllowedException if Kasada isn't enabled (403)
+     * @throws RateLimitException if rate limited after retries (429)
+     * @throws SolveException on bad request or backend failure (400/503)
+     */
+    public KasadaResult solveKasada(KasadaParams params) throws NSLSolverException {
+        Objects.requireNonNull(params, "params must not be null");
+
+        KasadaConfig config = params.getKasadaConfig();
+
+        JsonObject configJson = new JsonObject();
+        configJson.addProperty("p_js_path", config.getPJsPath());
+        configJson.addProperty("fp_host", config.getFpHost());
+        configJson.addProperty("tl_host", config.getTlHost());
+        if (config.getCdConstant() != null) {
+            configJson.addProperty("cd_constant", config.getCdConstant());
+        }
+
+        JsonObject body = new JsonObject();
+        body.addProperty("type", "kasada");
+        body.addProperty("url", params.getUrl());
+        body.addProperty("user_agent", params.getUserAgent());
+        body.addProperty("ua_version", params.getUaVersion());
+        body.add("kasada_config", configJson);
+
+        if (params.getProxy() != null) {
+            body.addProperty("proxy", params.getProxy());
+        }
+
+        String responseBody = executeWithRetry("POST", "/solve", body.toString());
+
+        JsonObject json = JsonParser.parseString(responseBody).getAsJsonObject();
+
+        Map<String, String> headers = new HashMap<>();
+        if (json.has("headers") && json.get("headers").isJsonObject()) {
+            JsonObject headersJson = json.getAsJsonObject("headers");
+            for (Map.Entry<String, JsonElement> entry : headersJson.entrySet()) {
+                headers.put(entry.getKey(), entry.getValue().getAsString());
+            }
+        }
+
+        return new KasadaResult(
+                headers,
+                getStringOrNull(json, "type"),
+                json.has("success") && json.get("success").getAsBoolean()
+        );
+    }
+
+    /**
      * Returns the current account balance and limits.
      * @throws AuthenticationException if the API key is invalid (401)
      */
@@ -181,6 +232,16 @@ public final class NSLSolver implements AutoCloseable {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 return solveChallenge(params);
+            } catch (NSLSolverException e) {
+                throw new CompletionException(e);
+            }
+        });
+    }
+
+    public CompletableFuture<KasadaResult> solveKasadaAsync(KasadaParams params) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return solveKasada(params);
             } catch (NSLSolverException e) {
                 throw new CompletionException(e);
             }
