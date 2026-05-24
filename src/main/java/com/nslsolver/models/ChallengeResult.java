@@ -10,12 +10,22 @@ public final class ChallengeResult {
     private final String userAgent;
     private final String type;
     private final boolean success;
+    private final String token;
+    private final double cost;
 
-    public ChallengeResult(Map<String, String> cookies, String userAgent, String type, boolean success) {
+    public ChallengeResult(
+            Map<String, String> cookies,
+            String userAgent,
+            String type,
+            boolean success,
+            String token,
+            double cost) {
         this.cookies = cookies != null ? Collections.unmodifiableMap(cookies) : Collections.emptyMap();
         this.userAgent = userAgent;
         this.type = type;
         this.success = success;
+        this.token = token;
+        this.cost = cost;
     }
 
     public Map<String, String> getCookies() { return cookies; }
@@ -30,6 +40,12 @@ public final class ChallengeResult {
     public String getType() { return type; }
     public boolean isSuccess() { return success; }
 
+    /** Set when the challenge page returned a Turnstile-style token instead of cookies. May be {@code null}. */
+    public String getToken() { return token; }
+
+    /** USD deducted from the account balance for this solve. */
+    public double getCost() { return cost; }
+
     @Override
     public String toString() {
         return "ChallengeResult{" +
@@ -37,6 +53,7 @@ public final class ChallengeResult {
                 ", userAgent='" + userAgent + '\'' +
                 ", type='" + type + '\'' +
                 ", success=" + success +
+                ", cost=" + cost +
                 '}';
     }
 }

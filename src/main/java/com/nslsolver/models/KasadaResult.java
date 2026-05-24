@@ -9,11 +9,13 @@ public final class KasadaResult {
     private final Map<String, String> headers;
     private final String type;
     private final boolean success;
+    private final double cost;
 
-    public KasadaResult(Map<String, String> headers, String type, boolean success) {
+    public KasadaResult(Map<String, String> headers, String type, boolean success, double cost) {
         this.headers = headers != null ? Collections.unmodifiableMap(headers) : Collections.emptyMap();
         this.type = type;
         this.success = success;
+        this.cost = cost;
     }
 
     public Map<String, String> getHeaders() { return headers; }
@@ -27,12 +29,16 @@ public final class KasadaResult {
     public String getType() { return type; }
     public boolean isSuccess() { return success; }
 
+    /** USD deducted from the account balance for this solve. */
+    public double getCost() { return cost; }
+
     @Override
     public String toString() {
         return "KasadaResult{" +
                 "headers=" + headers.keySet() +
                 ", type='" + type + '\'' +
                 ", success=" + success +
+                ", cost=" + cost +
                 '}';
     }
 }

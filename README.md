@@ -33,7 +33,7 @@ TurnstileResult result = solver.solveTurnstile(
         .url("https://example.com")
         .build()
 );
-System.out.println(result.getToken());
+System.out.println(result.getToken() + " (cost: $" + result.getCost() + ")");
 
 ChallengeResult challenge = solver.solveChallenge(
     ChallengeParams.builder()
@@ -58,7 +58,11 @@ KasadaResult kasada = solver.solveKasada(
 System.out.println(kasada.getHeaders());
 
 BalanceResult balance = solver.getBalance();
-System.out.println(balance.getBalance());
+System.out.printf("$%.4f  CPM: %d/%d  unlimited=%s%n",
+    balance.getBalance(),
+    balance.getCurrentCpm(),
+    balance.getCpmLimit(),
+    balance.isUnlimited());
 
 solver.close();
 ```

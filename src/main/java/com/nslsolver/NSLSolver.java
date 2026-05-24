@@ -23,7 +23,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
-/** Client for the NSLSolver captcha solving API. Supports Turnstile, Challenge, and Kasada solving. */
+/** Client for the NSLSolver captcha solving API. Supports Turnstile, Challenge, Kasada, and Akamai solving. */
 public final class NSLSolver implements AutoCloseable {
 
     private static final String DEFAULT_BASE_URL = "https://api.nslsolver.com";
@@ -98,7 +98,8 @@ public final class NSLSolver implements AutoCloseable {
         return new TurnstileResult(
                 getStringOrNull(json, "token"),
                 getStringOrNull(json, "type"),
-                json.has("success") && json.get("success").getAsBoolean()
+                json.has("success") && json.get("success").getAsBoolean(),
+                getDoubleOrZero(json, "cost")
         );
     }
 
@@ -138,7 +139,9 @@ public final class NSLSolver implements AutoCloseable {
                 cookies,
                 getStringOrNull(json, "user_agent"),
                 getStringOrNull(json, "type"),
-                json.has("success") && json.get("success").getAsBoolean()
+                json.has("success") && json.get("success").getAsBoolean(),
+                getStringOrNull(json, "token"),
+                getDoubleOrZero(json, "cost")
         );
     }
 
@@ -189,7 +192,47 @@ public final class NSLSolver implements AutoCloseable {
         return new KasadaResult(
                 headers,
                 getStringOrNull(json, "type"),
-                json.has("success") && json.get("success").getAsBoolean()
+                json.has("success") && json.get("success").getAsBoolean(),
+                getDoubleOrZero(json, "cost")
+        );
+    }
+
+    /**
+     * Solves an Akamai Bot Manager challenge. All three of url, userAgent, and
+     * proxy are required. The returned _abck cookie is bound to the proxy's
+     * egress IP and to the submitted UA.
+     * @throws AuthenticationException if the API key is invalid (401)
+     * @throws InsufficientBalanceException if balance is too low (402)
+     * @throws TypeNotAllowedException if Akamai isn't enabled (403)
+     * @throws RateLimitException if rate limited after retries (429)
+     * @throws SolveException on bad request or backend failure (400/503)
+     */
+    public AkamaiResult solveAkamai(AkamaiParams params) throws NSLSolverException {
+        Objects.requireNonNull(params, "params must not be null");
+
+        JsonObject body = new JsonObject();
+        body.addProperty("type", "akamai");
+        body.addProperty("url", params.getUrl());
+        body.addProperty("user_agent", params.getUserAgent());
+        body.addProperty("proxy", params.getProxy());
+
+        String responseBody = executeWithRetry("POST", "/solve", body.toString());
+
+        JsonObject json = JsonParser.parseString(responseBody).getAsJsonObject();
+
+        Map<String, String> cookies = new HashMap<>();
+        if (json.has("cookies") && json.get("cookies").isJsonObject()) {
+            JsonObject cookiesJson = json.getAsJsonObject("cookies");
+            for (Map.Entry<String, JsonElement> entry : cookiesJson.entrySet()) {
+                cookies.put(entry.getKey(), entry.getValue().getAsString());
+            }
+        }
+
+        return new AkamaiResult(
+                cookies,
+                getStringOrNull(json, "type"),
+                json.has("success") && json.get("success").getAsBoolean(),
+                getDoubleOrZero(json, "cost")
         );
     }
 
@@ -202,8 +245,12 @@ public final class NSLSolver implements AutoCloseable {
 
         JsonObject json = JsonParser.parseString(responseBody).getAsJsonObject();
 
-        double balance = json.has("balance") ? json.get("balance").getAsDouble() : 0.0;
-        int maxThreads = json.has("max_threads") ? json.get("max_threads").getAsInt() : 0;
+        double balance = getDoubleOrZero(json, "balance");
+        boolean unlimited = json.has("unlimited") && json.get("unlimited").getAsBoolean();
+        int maxCpm = json.has("max_cpm") ? json.get("max_cpm").getAsInt() : 0;
+        int currentCpm = json.has("current_cpm") ? json.get("current_cpm").getAsInt() : 0;
+        int cpmLimit = json.has("cpm_limit") ? json.get("cpm_limit").getAsInt() : maxCpm;
+        String unlimitedExpiresAt = getStringOrNull(json, "unlimited_expires_at");
 
         List<String> allowedTypes = new ArrayList<>();
         if (json.has("allowed_types") && json.get("allowed_types").isJsonArray()) {
@@ -213,7 +260,7 @@ public final class NSLSolver implements AutoCloseable {
             }
         }
 
-        return new BalanceResult(balance, maxThreads, allowedTypes);
+        return new BalanceResult(balance, unlimited, allowedTypes, maxCpm, currentCpm, cpmLimit, unlimitedExpiresAt);
     }
 
     // --- Async API ---
@@ -242,6 +289,16 @@ public final class NSLSolver implements AutoCloseable {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 return solveKasada(params);
+            } catch (NSLSolverException e) {
+                throw new CompletionException(e);
+            }
+        });
+    }
+
+    public CompletableFuture<AkamaiResult> solveAkamaiAsync(AkamaiParams params) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return solveAkamai(params);
             } catch (NSLSolverException e) {
                 throw new CompletionException(e);
             }
@@ -377,6 +434,13 @@ public final class NSLSolver implements AutoCloseable {
             return json.get(key).getAsString();
         }
         return null;
+    }
+
+    private static double getDoubleOrZero(JsonObject json, String key) {
+        if (json.has(key) && !json.get(key).isJsonNull()) {
+            try { return json.get(key).getAsDouble(); } catch (Exception ignored) { }
+        }
+        return 0.0;
     }
 
     @Override
