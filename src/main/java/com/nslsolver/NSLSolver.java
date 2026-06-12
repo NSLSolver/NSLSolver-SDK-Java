@@ -10,10 +10,13 @@ import com.nslsolver.exceptions.*;
 import com.nslsolver.models.*;
 
 import java.io.IOException;
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -23,7 +26,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
-/** Client for the NSLSolver captcha solving API. Supports Turnstile, Challenge, Kasada, and Akamai solving. */
+/** Client for the NSLSolver captcha solving API. Supports Turnstile, Challenge, Kasada, Akamai, and reCAPTCHA v3 solving. */
 public final class NSLSolver implements AutoCloseable {
 
     private static final String DEFAULT_BASE_URL = "https://api.nslsolver.com";
@@ -49,7 +52,7 @@ public final class NSLSolver implements AutoCloseable {
         this.apiKey = Objects.requireNonNull(builder.apiKey, "apiKey is required");
         this.baseUrl = builder.baseUrl != null ? builder.baseUrl : DEFAULT_BASE_URL;
         this.timeout = builder.timeout != null ? builder.timeout : DEFAULT_TIMEOUT;
-        this.maxRetries = builder.maxRetries > 0 ? builder.maxRetries : DEFAULT_MAX_RETRIES;
+        this.maxRetries = builder.maxRetries != null ? builder.maxRetries : DEFAULT_MAX_RETRIES;
         this.gson = new GsonBuilder().create();
 
         this.httpClient = HttpClient.newBuilder()
@@ -99,7 +102,8 @@ public final class NSLSolver implements AutoCloseable {
                 getStringOrNull(json, "token"),
                 getStringOrNull(json, "type"),
                 json.has("success") && json.get("success").getAsBoolean(),
-                getDoubleOrZero(json, "cost")
+                getDoubleOrZero(json, "cost"),
+                getLongOrNull(json, "solve_time_ms")
         );
     }
 
@@ -237,6 +241,50 @@ public final class NSLSolver implements AutoCloseable {
     }
 
     /**
+     * Solves a reCAPTCHA v3 (incl. Enterprise) challenge. All of siteKey, url,
+     * and proxy are required. The returned token is bound to the action it was
+     * issued for, so submit it for that same action.
+     * @throws AuthenticationException if the API key is invalid (401)
+     * @throws InsufficientBalanceException if balance is too low (402)
+     * @throws TypeNotAllowedException if reCAPTCHA v3 isn't enabled (403)
+     * @throws RateLimitException if rate limited after retries (429)
+     * @throws SolveException on bad request or backend failure (400/503)
+     */
+    public RecaptchaV3Result solveRecaptchaV3(RecaptchaV3Params params) throws NSLSolverException {
+        Objects.requireNonNull(params, "params must not be null");
+
+        JsonObject body = new JsonObject();
+        body.addProperty("type", "recaptchav3");
+        body.addProperty("site_key", params.getSiteKey());
+        body.addProperty("url", params.getUrl());
+        body.addProperty("proxy", params.getProxy());
+
+        // action only when provided (server defaults to "verify")
+        if (params.getAction() != null) {
+            body.addProperty("action", params.getAction());
+        }
+        // enterprise only when true, as a real JSON boolean
+        if (params.isEnterprise()) {
+            body.addProperty("enterprise", true);
+        }
+        if (params.getUserAgent() != null) {
+            body.addProperty("user_agent", params.getUserAgent());
+        }
+
+        String responseBody = executeWithRetry("POST", "/solve", body.toString());
+
+        JsonObject json = JsonParser.parseString(responseBody).getAsJsonObject();
+        // NOTE: the echoed response "type" is the hyphenated slug "recaptcha-v3",
+        // not the "recaptchav3" request discriminator — read it as-is.
+        return new RecaptchaV3Result(
+                getStringOrNull(json, "token"),
+                getStringOrNull(json, "action"),
+                getStringOrNull(json, "type"),
+                json.has("success") && json.get("success").getAsBoolean()
+        );
+    }
+
+    /**
      * Returns the current account balance and limits.
      * @throws AuthenticationException if the API key is invalid (401)
      */
@@ -299,6 +347,16 @@ public final class NSLSolver implements AutoCloseable {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 return solveAkamai(params);
+            } catch (NSLSolverException e) {
+                throw new CompletionException(e);
+            }
+        });
+    }
+
+    public CompletableFuture<RecaptchaV3Result> solveRecaptchaV3Async(RecaptchaV3Params params) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return solveRecaptchaV3(params);
             } catch (NSLSolverException e) {
                 throw new CompletionException(e);
             }
@@ -382,7 +440,9 @@ public final class NSLSolver implements AutoCloseable {
         } catch (NSLSolverException e) {
             throw e;
         } catch (IOException e) {
-            throw new NSLSolverException("Network error: " + e.getMessage(), e);
+            // Transient connectivity failures (connect/read timeouts, connection
+            // resets) are worth retrying within the configured bound.
+            throw new NSLSolverException("Network error: " + e.getMessage(), e, isTransientNetworkError(e));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new NSLSolverException("Request interrupted", e);
@@ -443,6 +503,20 @@ public final class NSLSolver implements AutoCloseable {
         return 0.0;
     }
 
+    private static Long getLongOrNull(JsonObject json, String key) {
+        if (json.has(key) && !json.get(key).isJsonNull()) {
+            try { return json.get(key).getAsLong(); } catch (Exception ignored) { }
+        }
+        return null;
+    }
+
+    /** True for transient connectivity failures (connect/read timeouts, connection issues) safe to retry. */
+    private static boolean isTransientNetworkError(IOException e) {
+        return e instanceof HttpTimeoutException        // covers HttpConnectTimeoutException
+                || e instanceof SocketTimeoutException
+                || e instanceof ConnectException;
+    }
+
     @Override
     public void close() {
         // HttpClient doesn't need explicit cleanup in Java 11+
@@ -455,7 +529,7 @@ public final class NSLSolver implements AutoCloseable {
         private final String apiKey;
         private String baseUrl;
         private Duration timeout;
-        private int maxRetries;
+        private Integer maxRetries;
 
         private Builder(String apiKey) {
             this.apiKey = Objects.requireNonNull(apiKey, "apiKey is required");
@@ -473,7 +547,7 @@ public final class NSLSolver implements AutoCloseable {
             return this;
         }
 
-        /** Max retries on 429/503. Defaults to 3. */
+        /** Max retries on 429/503 (and transient network errors). Defaults to 3; pass 0 to disable retries. */
         public Builder maxRetries(int maxRetries) {
             if (maxRetries < 0) {
                 throw new IllegalArgumentException("maxRetries must be >= 0");

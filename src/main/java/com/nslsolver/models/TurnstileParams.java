@@ -79,13 +79,19 @@ public final class TurnstileParams {
             return this;
         }
 
-        /** Optional proxy, e.g. {@code http://user:pass@host:port}. */
+        /**
+         * Advanced/optional. Proxy, e.g. {@code http://user:pass@host:port}. Not part of the
+         * documented Turnstile parameter set (site_key/url/action/cdata); only sent when set.
+         */
         public Builder proxy(String proxy) {
             this.proxy = proxy;
             return this;
         }
 
-        /** Optional user agent override. */
+        /**
+         * Advanced/optional. User agent override. Not part of the documented Turnstile parameter
+         * set (site_key/url/action/cdata); only sent when set.
+         */
         public Builder userAgent(String userAgent) {
             this.userAgent = userAgent;
             return this;

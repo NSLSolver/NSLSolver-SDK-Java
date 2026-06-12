@@ -1,6 +1,6 @@
 # NSLSolver Java SDK
 
-Java client for the [NSLSolver](https://nslsolver.com) captcha API. Supports Cloudflare Turnstile, Challenge pages, and Kasada.
+Java client for the [NSLSolver](https://nslsolver.com) captcha API. Supports Cloudflare Turnstile, Cloudflare Challenge pages, Kasada, Akamai Bot Manager, and reCAPTCHA v3 (incl. Enterprise).
 
 Requires Java 11+.
 
@@ -50,12 +50,32 @@ KasadaResult kasada = solver.solveKasada(
         .uaVersion(130)
         .kasadaConfig(KasadaConfig.builder()
             .pJsPath("/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/p.js")
-            .fpHost("https://fp.example.com")
-            .tlHost("https://tl.example.com")
+            .fpHost("passport.twitch.tv")   // bare hostname, no scheme
+            .tlHost("gql.twitch.tv")        // bare hostname, no scheme
             .build())
         .build()
 );
 System.out.println(kasada.getHeaders());
+
+AkamaiResult akamai = solver.solveAkamai(
+    AkamaiParams.builder()
+        .url("https://example.com")
+        .userAgent("Mozilla/5.0 ... Chrome/130.0.0.0 ...")
+        .proxy("http://user:pass@host:port")
+        .build()
+);
+System.out.println(akamai.getAbck()); // the _abck cookie, bound to the proxy + UA
+
+RecaptchaV3Result recaptcha = solver.solveRecaptchaV3(
+    RecaptchaV3Params.builder()
+        .siteKey("6Lc...")
+        .url("https://example.com")
+        .proxy("http://user:pass@host:port")
+        .action("login")      // optional; server defaults to "verify"
+        .enterprise(false)     // set true for reCAPTCHA Enterprise
+        .build()
+);
+System.out.println(recaptcha.getToken());
 
 BalanceResult balance = solver.getBalance();
 System.out.printf("$%.4f  CPM: %d/%d  unlimited=%s%n",

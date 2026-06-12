@@ -7,21 +7,33 @@ package com.nslsolver.exceptions;
 public class NSLSolverException extends Exception {
 
     private final int statusCode;
+    private final boolean retryable;
 
     public NSLSolverException(int statusCode, String message) {
         super(message);
         this.statusCode = statusCode;
+        this.retryable = false;
     }
 
     public NSLSolverException(int statusCode, String message, Throwable cause) {
         super(message, cause);
         this.statusCode = statusCode;
+        this.retryable = false;
     }
 
     /** Wraps a lower-level error (network timeout, etc.) with no HTTP status. */
     public NSLSolverException(String message, Throwable cause) {
+        this(message, cause, false);
+    }
+
+    /**
+     * Wraps a lower-level error with no HTTP status, marking whether it is a
+     * transient failure (e.g. connect/read timeout) the SDK may retry.
+     */
+    public NSLSolverException(String message, Throwable cause, boolean retryable) {
         super(message, cause);
         this.statusCode = 0;
+        this.retryable = retryable;
     }
 
     /** HTTP status code, or 0 if the error didn't come from an HTTP response. */
@@ -29,9 +41,12 @@ public class NSLSolverException extends Exception {
         return statusCode;
     }
 
-    /** True for 429 and 503 -- the SDK retries these automatically. */
+    /**
+     * True when the SDK retries this automatically: HTTP 429/503, or a transient
+     * network failure (connect/read timeout) flagged as retryable.
+     */
     public boolean isRetryable() {
-        return statusCode == 429 || statusCode == 503;
+        return statusCode == 429 || statusCode == 503 || retryable;
     }
 
     @Override

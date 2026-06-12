@@ -51,13 +51,13 @@ public final class KasadaConfig {
             return this;
         }
 
-        /** Required. Fingerprint host. */
+        /** Required. Bare hostname serving the fingerprint endpoint, e.g. {@code passport.twitch.tv} (no scheme). */
         public Builder fpHost(String fpHost) {
             this.fpHost = fpHost;
             return this;
         }
 
-        /** Required. Telemetry host. */
+        /** Required. Bare hostname for the Kasada TL token endpoint, e.g. {@code gql.twitch.tv} (no scheme). */
         public Builder tlHost(String tlHost) {
             this.tlHost = tlHost;
             return this;

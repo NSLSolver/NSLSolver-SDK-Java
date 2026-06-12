@@ -43,7 +43,10 @@ public final class ChallengeResult {
     /** Set when the challenge page returned a Turnstile-style token instead of cookies. May be {@code null}. */
     public String getToken() { return token; }
 
-    /** USD deducted from the account balance for this solve. */
+    /**
+     * USD deducted from the account balance for this solve, or {@code 0.0} if the
+     * response did not include a {@code cost} field (the Challenge response often omits it).
+     */
     public double getCost() { return cost; }
 
     @Override

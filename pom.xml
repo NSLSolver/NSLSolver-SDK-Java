@@ -10,14 +10,40 @@
     <packaging>jar</packaging>
 
     <name>NSLSolver Java SDK</name>
-    <description>Official Java SDK for the NSLSolver captcha solving API</description>
-    <url>https://nslsolver.com</url>
+    <description>Official Java SDK for the NSLSolver captcha solving API (Turnstile, Challenge, Kasada, Akamai, reCAPTCHA v3)</description>
+    <url>https://github.com/NSLSolver/NSLSolver-SDK-Java</url>
+
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>nslsolver</id>
+            <name>NSLSolver</name>
+            <email>support@nslsolver.com</email>
+            <organization>NSLSolver</organization>
+            <organizationUrl>https://nslsolver.com</organizationUrl>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/NSLSolver/NSLSolver-SDK-Java.git</connection>
+        <developerConnection>scm:git:git@github.com:NSLSolver/NSLSolver-SDK-Java.git</developerConnection>
+        <url>https://github.com/NSLSolver/NSLSolver-SDK-Java</url>
+        <tag>HEAD</tag>
+    </scm>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <gson.version>2.10.1</gson.version>
+        <junit.version>5.10.2</junit.version>
     </properties>
 
     <dependencies>
@@ -25,6 +51,12 @@
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
             <version>${gson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -43,6 +75,11 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.3.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

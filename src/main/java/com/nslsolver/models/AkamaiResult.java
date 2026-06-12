@@ -30,10 +30,14 @@ public final class AkamaiResult {
     /** Shortcut for the {@code bm_sz} cookie value. */
     public String getBmSz() { return cookies.get("bm_sz"); }
 
+    /** The response type slug, typically {@code akamai-bypass}. May be {@code null}. */
     public String getType() { return type; }
     public boolean isSuccess() { return success; }
 
-    /** USD deducted from the account balance for this solve. */
+    /**
+     * USD deducted from the account balance for this solve, or {@code 0.0} if the
+     * response did not include a {@code cost} field (the Akamai response often omits it).
+     */
     public double getCost() { return cost; }
 
     @Override
